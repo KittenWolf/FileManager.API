@@ -1,4 +1,7 @@
 
+using FileManager.API.Abstractions;
+using FileManager.API.Services;
+
 namespace FileManager.API
 {
     public class Program
@@ -16,6 +19,8 @@ namespace FileManager.API
                             .WithMethods("POST");
                     });
             });
+
+            builder.Services.AddScoped<IFileManagerService, FileManagerService>();
 
             builder.Services.AddControllers();
             builder.Services.AddSwaggerGen();

@@ -1,37 +1,55 @@
-﻿using FileManager.Models;
+﻿using FileManager.API.Abstractions;
+using FileManager.Models;
 using System.IO.Compression;
 using System.Text.Json;
 
 namespace FileManager.API.Services
 {
-    public class FileManagerService
+    public class FileManagerService : IFileManagerService
     {
-        private readonly string _tempPath;
-        private readonly string _filePath;
-        private readonly string _extractPath;
+        private string _tempPath = string.Empty;
+        private string _filePath = string.Empty;
+        private string _extractPath = string.Empty;
 
-        private IFormFile _file;
-
-        private readonly JsonSerializerOptions _options;
-
-        public FileManagerService(IFormFile file)
+        private readonly JsonSerializerOptions _options = new()
         {
-            _file = file ?? throw new Exception("No file uploaded");
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
 
-            _tempPath = Path.GetTempPath();
-            _filePath = Path.Combine(_tempPath, _file.FileName);
-            _extractPath = Path.Combine(Path.GetTempPath(), "Working project");
+        public async Task<string> TryReadFileAsync(IFormFile file)
+        {
+            await UploadFile(file);
 
-            _options = new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = true
-            };
+            var node = ReadCatalog();
+            var json = JsonSerializer.Serialize(node, _options);
+
+            RemoveTemporalFiles();
+
+            return json;
         }
 
-        public void CheckFileExtention()
+        private async Task UploadFile(IFormFile file)
         {
-            var extention = Path.GetExtension(_file.FileName);
+            if (file == null)
+            {
+                throw new Exception("No file uploaded");
+            }
+
+            _tempPath = Path.GetTempPath();
+            _filePath = Path.Combine(_tempPath, file.FileName);
+            _extractPath = Path.Combine(Path.GetTempPath(), "Working project");
+
+            CheckFileExtention(file);
+
+            await CopyFileToLocalStorage(file);
+
+            ExtractArchive();
+        }
+
+        private void CheckFileExtention(IFormFile file)
+        {
+            var extention = Path.GetExtension(file.FileName);
 
             if (!extention.Equals(".zip"))
             {
@@ -39,18 +57,26 @@ namespace FileManager.API.Services
             }
         }
 
-        internal async Task CopyToLocalStorage()
+        private async Task CopyFileToLocalStorage(IFormFile file)
         {
             using var stream = new FileStream(_filePath, FileMode.Create);
-            await _file.CopyToAsync(stream);
+            await file.CopyToAsync(stream);
         }
 
-        internal void ExtractArchive()
+        private void ExtractArchive()
         {
+            //using ZipArchive archive = ZipFile.OpenRead(_filePath);
+
+            //foreach (var entry in archive.Entries)
+            //{
+            //    var name = entry.Name;
+            //    var size = entry.Length;
+            //}
+
             ZipFile.ExtractToDirectory(_filePath, _extractPath);
         }
 
-        internal Node ReadCatalog()
+        private Node ReadCatalog()
         {
             var catalogReader = new CatalogReader(_extractPath);
             var node = catalogReader.TryRead();
@@ -58,7 +84,7 @@ namespace FileManager.API.Services
             return node;
         }
 
-        internal void RemoveTemporalFiles()
+        private void RemoveTemporalFiles()
         {
             if (File.Exists(_filePath))
             {
@@ -69,20 +95,6 @@ namespace FileManager.API.Services
             {
                 Directory.Delete(_extractPath, true);
             }
-        }
-
-        internal async Task<string> TryReadFileAsync()
-        {
-            CheckFileExtention();
-
-            await CopyToLocalStorage();
-
-            ExtractArchive();
-
-            var node = ReadCatalog();
-            var json = JsonSerializer.Serialize(node, _options);
-
-            return json;
         }
     }
 }
