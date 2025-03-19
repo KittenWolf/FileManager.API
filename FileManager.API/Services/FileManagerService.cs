@@ -1,87 +1,62 @@
 ﻿using FileManager.API.Abstractions;
-using FileManager.Models;
-using System.IO.Compression;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace FileManager.API.Services
 {
-    public class FileManagerService : IFileManagerService
+    public partial class FileManagerService(IZipArchiveReaderService zipArchiveReaderService) : IFileManagerService
     {
-        private string _tempPath = string.Empty;
-        private string _filePath = string.Empty;
-        private string _extractPath = string.Empty;
-
         private readonly JsonSerializerOptions _options = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             WriteIndented = true
         };
 
+        private string _filePath = string.Empty;
+
         public async Task<string> TryReadFileAsync(IFormFile file)
         {
-            await UploadFile(file);
-
-            var node = ReadCatalog();
-            var json = JsonSerializer.Serialize(node, _options);
-
-            RemoveTemporalFiles();
-
-            return json;
-        }
-
-        private async Task UploadFile(IFormFile file)
-        {
-            if (file == null)
+            try
             {
-                throw new Exception("No file uploaded");
+                await UploadFileAsync(file);
+
+                var json = string.Empty;
+                var extention = FileExtentionRegex().Match(file.FileName).Value;
+
+                switch (extention)
+                {
+                    case ".zip":
+                        var node = zipArchiveReaderService.ReadArchive(_filePath);
+                        json = JsonSerializer.Serialize(node, _options);
+                        break;
+
+                    default: 
+                        throw new Exception($"{file.FileName} is not supported! Use .zip format files");
+                }
+
+                RemoveTemporalFiles();
+
+                return json;
             }
-
-            _tempPath = Path.GetTempPath();
-            _filePath = Path.Combine(_tempPath, file.FileName);
-            _extractPath = Path.Combine(Path.GetTempPath(), "Working project");
-
-            CheckFileExtention(file);
-
-            await CopyFileToLocalStorage(file);
-
-            ExtractArchive();
-        }
-
-        private void CheckFileExtention(IFormFile file)
-        {
-            var extention = Path.GetExtension(file.FileName);
-
-            if (!extention.Equals(".zip"))
+            catch (Exception)
             {
-                throw new Exception($"{extention} is not supported! Use .zip format files");
+                throw;
             }
         }
 
-        private async Task CopyFileToLocalStorage(IFormFile file)
+        private async Task UploadFileAsync(IFormFile file)
+        {
+            var tempPath = Path.GetTempPath();
+
+            _filePath = Path.Combine(tempPath, file.FileName);
+
+            await CopyFileToLocalStorageAsync(file);
+        }
+
+        private async Task CopyFileToLocalStorageAsync(IFormFile file)
         {
             using var stream = new FileStream(_filePath, FileMode.Create);
             await file.CopyToAsync(stream);
-        }
-
-        private void ExtractArchive()
-        {
-            //using ZipArchive archive = ZipFile.OpenRead(_filePath);
-
-            //foreach (var entry in archive.Entries)
-            //{
-            //    var name = entry.Name;
-            //    var size = entry.Length;
-            //}
-
-            ZipFile.ExtractToDirectory(_filePath, _extractPath);
-        }
-
-        private Node ReadCatalog()
-        {
-            var catalogReader = new CatalogReader(_extractPath);
-            var node = catalogReader.TryRead();
-
-            return node;
         }
 
         private void RemoveTemporalFiles()
@@ -90,11 +65,9 @@ namespace FileManager.API.Services
             {
                 File.Delete(_filePath);
             }
-
-            if (Directory.Exists(_extractPath))
-            {
-                Directory.Delete(_extractPath, true);
-            }
         }
+
+        [GeneratedRegex(".\\w+$")]
+        public static partial Regex FileExtentionRegex();
     }
 }

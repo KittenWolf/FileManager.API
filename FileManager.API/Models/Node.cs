@@ -2,7 +2,7 @@
 using System.IO.Compression;
 using System.Text.Json.Serialization;
 
-namespace FileManager.Models
+namespace FileManager.API.Models
 {
     public class Node
     {
@@ -17,7 +17,7 @@ namespace FileManager.Models
 
         public string Name { get; private set; } = string.Empty;
         public string Size { get; private set; } = string.Empty;
-        
+
         public long Bytes { get; private set; }
 
         [JsonPropertyName("date")]

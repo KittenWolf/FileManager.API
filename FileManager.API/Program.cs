@@ -1,4 +1,3 @@
-
 using FileManager.API.Abstractions;
 using FileManager.API.Services;
 
@@ -20,7 +19,9 @@ namespace FileManager.API
                     });
             });
 
-            builder.Services.AddScoped<IFileManagerService, FileManagerService>();
+            builder.Services.AddSingleton<IFileCatalogReaderService, FileCatalogReaderService>();
+            builder.Services.AddSingleton<IZipArchiveReaderService, ZipArchiveReaderService>();
+            builder.Services.AddSingleton<IFileManagerService, FileManagerService>();
 
             builder.Services.AddControllers();
             builder.Services.AddSwaggerGen();
